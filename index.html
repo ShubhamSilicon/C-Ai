@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>C Ai — Professional AI Chat</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+<style>
+  :root { color-scheme: light; }
+  .dark { color-scheme: dark; }
+  .chat-scroll::-webkit-scrollbar { width: 8px; }
+  .chat-scroll::-webkit-scrollbar-thumb { background: #6366f1aa; border-radius: 999px; }
+  .fade-in { animation: fadeIn .25s ease; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  .typing span { animation: blink 1.2s infinite; }
+  .typing span:nth-child(2) { animation-delay: .2s; }
+  .typing span:nth-child(3) { animation-delay: .4s; }
+  @keyframes blink { 0%,80%,100% { opacity:.25 } 40% { opacity:1 } }
+</style>
+</head>
+
+<body class="bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
+
+<!-- AUTH SCREEN -->
+<section id="authScreen" class="min-h-screen grid place-items-center px-4">
+  <div class="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-8 shadow-xl dark:border-slate-800 dark:bg-slate-900">
+    <div class="mb-6 text-center">
+      <div class="mx-auto mb-3 grid h-14 w-14 place-items-center rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-600 text-white shadow-lg">
+        <span class="text-xl font-black">C</span>
+      </div>
+      <h1 class="text-2xl font-bold">Welcome to C Ai</h1>
+      <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+        Sign in to continue your conversations.
+      </p>
+    </div>
+
+    <div class="mb-4 grid grid-cols-2 rounded-xl bg-slate-100 p-1 dark:bg-slate-800">
+      <button id="loginTab" class="rounded-lg px-4 py-2 text-sm font-semibold bg-white shadow dark:bg-slate-700">
+        Login
+      </button>
+      <button id="registerTab" class="rounded-lg px-4 py-2 text-sm font-semibold text-slate-500 dark:text-slate-400">
+        Register
+      </button>
+    </div>
+
+    <form id="authForm" class="space-y-4">
+      <div id="nameField" class="hidden">
+        <label class="mb-1 block text-sm font-medium">Full name</label>
+        <input id="fullName" type="text" autocomplete="name"
+          class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 outline-none focus:border-indigo-500 dark:border-slate-700 dark:bg-slate-800" />
+      </div>
+
+      <div>
+        <label class="mb-1 block text-sm font-medium">Email</label>
+        <input id="email" type="email" required autocomplete="email"
+          class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 outline-none focus:border-indigo-500 dark:border-slate-700 dark:bg-slate-800" />
+      </div>
+
+      <div>
+        <label class="mb-1 block text-sm font-medium">Password</label>
+        <div class="relative">
+          <input id="password" type="password" required autocomplete="current-password"
+            class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 pr-12 outline-none focus:border-indigo-500 dark:border-slate-700 dark:bg-slate-800" />
+          <button type="button" id="togglePassword"
+            class="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-indigo-600">
+            Show
+          </button>
+        </div>
+        <p id="passwordHint" class="mt-1 hidden text-xs text-amber-600">
+          Use at least 8 characters.
+        </p>
+      </div>
+
+      <button id="authSubmit" type="submit"
+        class="w-full rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-3 font-semibold text-white transition hover:opacity-90 disabled:opacity-60">
+        Sign in
+      </button>
+
+      <button type="button" id="forgotPassword" class="w-full text-sm text-indigo-600 hover:underline">
+        Forgot password?
+      </button>
+
+      <p id="authMessage" class="hidden rounded-xl px-4 py-3 text-sm"></p>
+    </form>
+  </div>
+</section>
+
+<!-- APP -->
+<div id="app" class="hidden min-h-screen">
+  <div class="flex min-h-screen">
+
+    <!-- SIDEBAR -->
+    <aside id="sidebar"
+      class="fixed inset-y-0 left-0 z-40 flex w-72 -translate-x-full flex-col border-r border-slate-200 bg-white p-4 transition-transform dark:border-slate-800 dark:bg-slate-900 lg:static lg:translate-x-0">
+
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <div class="grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br from-indigo-600 to-violet-600 font-black text-white">
+            C
+          </div>
+          <span class="text-lg font-bold">C Ai</span>
+        </div>
+
+        <button id="closeSidebar" class="rounded-lg p-2 hover:bg-slate-100 dark:hover:bg-slate-800 lg:hidden">
+          ✕
+        </button>
+      </div>
+
+      <button id="newChat"
+        class="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 font-semibold text-white hover:bg-indigo-700">
+        + New chat
+      </button>
+
+      <input id="chatSearch" placeholder="Search conversations"
+        class="mt-4 w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-indigo-500 dark:border-slate-700 dark:bg-slate-800" />
+
+      <div class="mt-4 flex-1 overflow-y-auto chat-scroll">
+        <p class="px-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
+          Recent
+        </p>
+        <div id="conversationList" class="mt-2 space-y-1"></div>
+      </div>
+
+      <div class="mt-4 rounded-2xl border border-indigo-100 bg-indigo-50 p-3 text-sm dark:border-indigo-900 dark:bg-indigo-950">
+        <p class="font-semibold">Daily usage</p>
+        <p id="usageText" class="mt-1 text-slate-600 dark:text-slate-300">
+          Loading…
+        </p>
+        <button id="upgradeButton"
+          class="mt-3 w-full rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-3 py-2 font-semibold text-white">
+          Upgrade — ₹20
+        </button>
+      </div>
+
+      <div class="mt-4 border-t border-slate-200 pt-3 dark:border-slate-800">
+        <button id="profileButton"
+          class="flex w-full items-center gap-3 rounded-xl p-2 text-left hover:bg-slate-100 dark:hover:bg-slate-800">
+          <div id="avatar" class="grid h-9 w-9 place-items-center rounded-full bg-indigo-600 font-bold text-white">
+            U
+          </div>
+          <div class="min-w-0">
+            <p id="sidebarName" class="truncate text-sm font-semibold">User</p>
+            <p id="sidebarEmail" class="truncate text-xs text-slate-500">email</p>
+          </div>
+        </button>
+
+        <button id="themeToggle"
+          class="mt-1 w-full rounded-xl p-2 text-left text-sm hover:bg-slate-100 dark:hover:bg-slate-800">
+          Toggle theme
+        </button>
+
+        <button id="logoutButton"
+          class="mt-1 w-full rounded-xl p-2 text-left text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-950">
+          Sign out
+        </button>
+      </div>
+    </aside>
+
+    <!-- MAIN CHAT -->
+    <main class="flex min-h-screen flex-1 flex-col">
+      <header class="flex items-center justify-between border-b border-slate-200 bg-white/80 px-4 py-3 backdrop-blur dark:border-slate-800 dark:bg-slate-900/80">
+        <div class="flex items-center gap-3">
+          <button id="openSidebar" class="rounded-lg p-2 hover:bg-slate-100 dark:hover:bg-slate-800 lg:hidden">
+            ☰
+          </button>
+          <div>
+            <h2 id="chatTitle" class="font-semibold">New conversation</h2>
+            <p class="text-xs text-slate-500">Secure AI assistant</p>
+          </div>
+        </div>
+
+        <button id="clearChat"
+          class="rounded-xl border border-slate-300 px-3 py-2 text-sm hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
+          Clear chat
+        </button>
+      </header>
+
+      <div id="messages" class="chat-scroll flex-1 space-y-4 overflow-y-auto p-4 md:p-8"></div>
+
+      <div id="aiNotice"
+        class="mx-4 mb-2 hidden rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
+        AI backend is not configured yet.
+      </div>
+
+      <form id="chatForm" class="border-t border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
+        <div class="mx-auto flex max-w-4xl items-end gap-2">
+          <textarea id="prompt" rows="1" placeholder="Message C Ai…"
+            class="max-h-40 flex-1 resize-none rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 outline-none focus:border-indigo-500 dark:border-slate-700 dark:bg-slate-800"></textarea>
+
+          <button id="sendButton" type="submit"
+            class="rounded-2xl bg-indigo-600 px-5 py-3 font-semibold text-white hover:bg-indigo-700 disabled:opacity-50">
+            Send
+          </button>
+        </div>
+
+        <p class="mx-auto mt-2 max-w-4xl text-xs text-slate-500">
+          Enter to send • Shift + Enter for a new line
+        </p>
+      </form>
+    </main>
+  </div>
+</div>
+
+<!-- UPGRADE MODAL -->
+<div id="upgradeModal" class="fixed inset-0 z-50 hidden grid place-items-center bg-black/50 p-4">
+  <div class="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl dark:bg-slate-900">
+    <h3 class="text-xl font-bold">Upgrade to C Ai Premium</h3>
+
+    <p class="mt-2 text-sm text-slate-600 dark:text-slate-300">
+      You have reached today’s free response limit. Premium access is granted only after secure Razorpay verification.
+    </p>
+
+    <div class="mt-5 rounded-2xl border border-indigo-100 bg-indigo-50 p-4 dark:border-indigo-900 dark:bg-indigo-950">
+      <p class="text-sm text-slate-600 dark:text-slate-300">One-time access</p>
+      <p class="text-3xl font-black">₹20</p>
+    </div>
+
+    <button id="startPayment"
+      class="mt-5 w-full rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-3 font-semibold text-white">
+      Pay securely with Razorpay
+    </button>
+
+    <button id="closeUpgrade"
+      class="mt-3 w-full rounded-xl border border-slate-300 px-4 py-3 dark:border-slate-700">
+      Later
+    </button>
+  </div>
+</div>
+
+<script>
+/* ================= FIREBASE ================= */
+const firebaseConfig = {
+  apiKey: "AIzaSyDVUPR306cQRGhQ0wW0R13YqIbu1pO2e5GY",
+  authDomain: "c-ai-e2e3f.firebaseapp.com",
+  databaseURL: "https://c-ai-e2e3f-default-rtdb.firebaseio.com",
+  projectId: "c-ai-e2e3f",
+  storageBucket: "c-ai-e2e3f.firebasestorage.app",
+  messagingSenderId: "267428061117",
+  appId: "1:267428061117:web:4f8a8008c5c6c5dd49bcd4"
+};
+
+firebase.initializeApp(firebaseConfig);
+
+const auth = firebase.auth();
+const db = firebase.firestore();
+
+/* ================= CONFIG ================= */
+const APP_CONFIG = {
+  freeDailyLimit: 10,
+  premiumPrice: 2000, // ₹20 = 2000 paise
+  currency: "INR",
+
+  // Replace these with the exact URLs Firebase prints after deployment.
+  aiEndpoint: "YOUR_DEPLOYED_FUNCTION_URL/aiChat",
+  createOrderEndpoint: "YOUR_DEPLOYED_FUNCTION_URL/createRazorpayOrder",
+  verifyPaymentEndpoint: "YOUR_DEPLOYED_FUNCTION_URL/verifyRazorpayPayment",
+
+  razorpayKeyId: "YOUR_RAZORPAY_KEY_ID"
+};
+
+let currentUser = null;
+let currentConversationId = null;
+let isRegisterMode = false;
+let generating = false;
+
+/* ================= HELPERS ================= */
+const $ = id => document.getElementById(id);
+
+const todayKey = () =>
+  new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+
+function showMessage(text, isError = true) {
+  const el = $("authMessage");
+  el.textContent = text;
+  el.classList.remove("hidden");
+  el.className = "rounded-xl px-4 py-3 text-sm " + (
+    isError
+      ? "bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300"
+      : "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
+  );
+}
+
+function safeText(value) {
+  const div = document.createElement("div");
+  div.textContent = String(value ?? "");
+  return div.innerHTML;
+}
+
+function renderMessage(role, content) {
+  const wrap = document.createElement("div");
+  wrap.className = "fade-in flex " + (
+    role === "user" ? "justify-end" : "justify-start"
+  );
+
+  const bubble = document.createElement("div");
+  bubble.className = role === "user"
+    ? "max-w-[85%] rounded-2xl rounded-br-sm bg-indigo-600 px-4 py-3 text-white shadow"
+    : "max-w-[85%] rounded-2xl rounded-bl-sm border border-slate-200 bg-white px-4 py-3 shadow-sm dark:border-slate-800 dark:bg-slate-900";
+
+  bubble.innerHTML = safeText(content).replace(/
+/g, "<br>");
+  wrap.appendChild(bubble);
+
+  $("messages").appendChild(wrap);
+  $("messages").scrollTop = $("messages").scrollHeight;
+
+  return bubble;
+}
+
+function showTyping() {
+  const bubble = renderMessage("assistant", "");
+  bubble.innerHTML = `
+    <span class="typing flex gap-1">
+      <span>•</span><span>•</span><span>•</span>
+    </span>
+  `;
+  return bubble;
+}
+
+/* ================= AUTH UI ================= */
+$("loginTab").onclick = () => setAuthMode(false);
+$("registerTab").onclick = () => setAuthMode(true);
+
+function setAuthMode(register) {
+  isRegisterMode = register;
+
+  $("nameField").classList.toggle("hidden", !register);
+
+  $("loginTab").className = "rounded-lg px-4 py-2 text-sm font-semibold " + (
+    !register
+      ? "bg-white shadow dark:bg-slate-700"
+      : "text-slate-500 dark:text-slate-400"
+  );
+
+  $("registerTab").className = "rounded-lg px-4 py-2 text-sm font-semibold " + (
+    register
+      ? "bg-white shadow dark:bg-slate-700"
+      : "text-slate-500 dark:text-slate-400"
+  );
+
+  $("authSubmit").textContent = register ? "Create account" : "Sign in";
+  $("authMessage").classList.add("hidden");
+}
+
+$("togglePassword").onclick = () => {
+  const input = $("password");
+  input.type = input.type === "password" ? "text" : "password";
+  $("togglePassword").textContent = input.type === "password" ? "Show" : "Hide";
+};
+
+/* ================= AUTH ACTIONS ================= */
+$("authForm").onsubmit = async e => {
+  e.preventDefault();
+
+  const email = $("email").value.trim();
+  const password = $("password").value;
+  const name = $("fullName").value.trim();
+
+  if (!/^[^s@]+@[^s@]+.[^s@]+$/.test(email)) {
+    return showMessage("Enter a valid email address.");
+  }
+
+  if (password.length < 8) {
+    return showMessage("Password must be at least 8 characters.");
+  }
+
+  $("authSubmit").disabled = true;
+
+  try {
+    if (isRegisterMode) {
+      if (!name) return showMessage("Enter your full name.");
+
+      const credential = await auth.createUserWithEmailAndPassword(email, password);
+      await credential.user.updateProfile({ displayName: name });
+      await credential.user.sendEmailVerification();
+
+      await db.collection("users").doc(credential.user.uid).set({
+        displayName: name,
+        email,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        plan: "free",
+        accountStatus: "active",
+        preferences: {
+          theme: "system",
+          enterToSend: true
+        }
+      });
+
+      showMessage("Account created. Please verify your email.", false);
+    } else {
+      await auth.signInWithEmailAndPassword(email, password);
+    }
+  } catch (error) {
+    showMessage(
+      error.code === "auth/email-already-in-use"
+        ? "This email is already registered."
+        : error.message
+    );
+  } finally {
+    $("authSubmit").disabled = false;
+  }
+};
+
+$("forgotPassword").onclick = async () => {
+  const email = $("email").value.trim();
+
+  if (!email) return showMessage("Enter your email first.");
+
+  try {
+    await auth.sendPasswordResetEmail(email);
+    showMessage("Password reset email sent.", false);
+  } catch (error) {
+    showMessage(error.message);
+  }
+};
+
+$("logoutButton").onclick = () => auth.signOut();
+
+/* ================= SESSION ================= */
+auth.onAuthStateChanged(async user => {
+  if (!user) {
+    currentUser = null;
+    $("authScreen").classList.remove("hidden");
+    $("app").classList.add("hidden");
+    return;
+  }
+
+  currentUser = user;
+  $("authScreen").classList.add("hidden");
+  $("app").classList.remove("hidden");
+
+  const userRef = db.collection("users").doc(user.uid);
+  const snapshot = await userRef.get();
+
+  if (!snapshot.exists) {
+    await userRef.set({
+      displayName: user.displayName || "User",
+      email: user.email,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      plan: "free",
+      accountStatus: "active",
+      preferences: {
+        theme: "system",
+        enterToSend: true
+      }
+    });
+  }
+
+  const data = (await userRef.get()).data();
+
+  $("sidebarName").textContent = data.displayName || "User";
+  $("sidebarEmail").textContent = user.email;
+  $("avatar").textContent = (data.displayName || "U").charAt(0).toUpperCase();
+
+  loadConversations();
+  loadUsage();
+});
+
+/* ================= CONVERSATIONS ================= */
+async function loadConversations() {
+  if (!currentUser) return;
+
+  const query = await db
+    .collection("users")
+    .doc(currentUser.uid)
+    .collection("conversations")
+    .orderBy("updatedAt", "desc")
+    .limit(50)
+    .get();
+
+  const list = $("conversationList");
+  list.innerHTML = "";
+
+  query.forEach(doc => {
+    const data = doc.data();
+
+    const button = document.createElement("button");
+    button.className =
+      "w-full truncate rounded-xl px-3 py-2 text-left text-sm hover:bg-slate-100 dark:hover:bg-slate-800";
+    button.textContent = data.title || "Untitled chat";
+
+    button.onclick = () => openConversation(doc.id, data.title);
+    list.appendChild(button);
+  });
+}
+
+$("chatSearch").oninput = e => {
+  const term = e.target.value.toLowerCase();
+
+  [...$("conversationList").children].forEach(button => {
+    button.style.display = button.textContent
+      .toLowerCase()
+      .includes(term)
+      ? ""
+      : "none";
+  });
+};
+
+$("newChat").onclick = () => {
+  currentConversationId = null;
+  $("messages").innerHTML = "";
+  $("chatTitle").textContent = "New conversation";
+
+  renderMessage(
+    "assistant",
+    "Hello! I’m C Ai. How can I help you today?"
+  );
+};
+
+async function openConversation(id, title) {
+  currentConversationId = id;
+  $("chatTitle").textContent = title || "Conversation";
+  $("messages").innerHTML = "";
+
+  const query = await db
+    .collection("users")
+    .doc(currentUser.uid)
+    .collection("conversations")
+    .doc(id)
+    .collection("messages")
+    .orderBy("createdAt", "asc")
+    .get();
+
+  query.forEach(doc => {
+    renderMessage(doc.data().role, doc.data().content);
+  });
+}
+
+$("clearChat").onclick = async () => {
+  if (!currentConversationId) return;
+  if (!confirm("Delete this conversation?")) return;
+
+  const conversationRef = db
+    .collection("users")
+    .doc(currentUser.uid)
+    .collection("conversations")
+    .doc(currentConversationId);
+
+  const messages = await conversationRef.collection("messages").get();
+  const batch = db.batch();
+
+  messages.forEach(doc => batch.delete(doc.ref));
+  batch.delete(conversationRef);
+
+  await batch.commit();
+
+  $("newChat").click();
+  loadConversations();
+};
+
+/* ================= AI CHAT ================= */
+$("prompt").addEventListener("keydown", e => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    $("chatForm").requestSubmit();
+  }
+});
+
+$("chatForm").onsubmit = async e => {
+  e.preventDefault();
+
+  const text = $("prompt").value.trim();
+
+  if (!text || generating || !currentUser) return;
+
+  renderMessage("user", text);
+  $("prompt").value = "";
+
+  generating = true;
+  $("sendButton").disabled = true;
+
+  const typing = showTyping();
+
+  try {
+    const idToken = await currentUser.getIdToken();
+
+    const response = await fetch(APP_CONFIG.aiEndpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${idToken}`
+      },
+      body: JSON.stringify({
+        message: text,
+        conversationId: currentConversationId
+      })
+    });
+
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      if (response.status === 429) {
+        typing.innerHTML = safeText(
+          data.upgradeRequired
+            ? "You have reached today’s free limit. Please upgrade to continue."
+            : "Daily usage limit reached. Please try again tomorrow."
+        );
+
+        if (data.upgradeRequired) {
+          $("upgradeModal").classList.remove("hidden");
+        }
+      } else {
+        typing.innerHTML = safeText(
+          data.error ||
+            "Sorry, C Ai could not generate a response. Please try again."
+        );
+      }
+    } else {
+      const reply = data.reply || "No response received.";
+      typing.innerHTML = safeText(reply);
+
+      await saveMessage("user", text);
+      await saveMessage("assistant", reply);
+      await ensureConversationRecord(text);
+
+      if (typeof data.remaining === "number") {
+        $("usageText").textContent =
+          `${data.remaining} of ${APP_CONFIG.freeDailyLimit} free responses remaining today`;
+      } else {
+        await incrementUsage();
+      }
+
+      loadConversations();
+    }
+  } catch (error) {
+    console.error(error);
+    typing.innerHTML = safeText(
+      "Network error. Please check your connection and try again."
+    );
+  } finally {
+    generating = false;
+    $("sendButton").disabled = false;
+  }
+};
+
+async function ensureConversationRecord(firstMessage) {
+  if (currentConversationId) {
+    await db
+      .collection("users")
+      .doc(currentUser.uid)
+      .collection("conversations")
+      .doc(currentConversationId)
+      .update({
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+
+    return;
+  }
+
+  const title =
+    firstMessage.slice(0, 48) + (firstMessage.length > 48 ? "…" : "");
+
+  const doc = await db
+    .collection("users")
+    .doc(currentUser.uid)
+    .collection("conversations")
+    .add({
+      title,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      messageCount: 2
+    });
+
+  currentConversationId = doc.id;
+  $("chatTitle").textContent = title;
+}
+
+async function saveMessage(role, content) {
+  if (!currentConversationId) return;
+
+  await db
+    .collection("users")
+    .doc(currentUser.uid)
+    .collection("conversations")
+    .doc(currentConversationId)
+    .collection("messages")
+    .add({
+      role,
+      content,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+}
+
+/* ================= USAGE ================= */
+async function loadUsage() {
+  if (!currentUser) return;
+
+  const date = todayKey();
+
+  const snapshot = await db
+    .collection("users")
+    .doc(currentUser.uid)
+    .collection("dailyUsage")
+    .doc(date)
+    .get();
+
+  const used = snapshot.exists ? snapshot.data().responseCount || 0 : 0;
+  const remaining = Math.max(0, APP_CONFIG.freeDailyLimit - used);
+
+  $("usageText").textContent =
+    `${remaining} of ${APP_CONFIG.freeDailyLimit} free responses remaining today`;
+}
+
+async function incrementUsage() {
+  if (!currentUser) return;
+
+  const date = todayKey();
+
+  await db
+    .collection("users")
+    .doc(currentUser.uid)
+    .collection("dailyUsage")
+    .doc(date)
+    .set(
+      {
+        responseCount: firebase.firestore.FieldValue.increment(1),
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      },
+      { merge: true }
+    );
+
+  loadUsage();
+}
+
+/* ================= RAZORPAY ================= */
+$("upgradeButton").onclick = () =>
+  $("upgradeModal").classList.remove("hidden");
+
+$("closeUpgrade").onclick = () =>
+  $("upgradeModal").classList.add("hidden");
+
+$("startPayment").onclick = async () => {
+  if (!currentUser) return;
+
+  try {
+    const idToken = await currentUser.getIdToken();
+
+    const response = await fetch(APP_CONFIG.createOrderEndpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${idToken}`
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error("Unable to create payment order.");
+    }
+
+    const order = await response.json();
+
+    const razorpay = new Razorpay({
+      key: APP_CONFIG.razorpayKeyId,
+      amount: APP_CONFIG.premiumPrice,
+      currency: APP_CONFIG.currency,
+      name: "C Ai",
+      description: "C Ai Premium access",
+      order_id: order.id,
+
+      handler: async paymentResponse => {
+        const verifyResponse = await fetch(
+          APP_CONFIG.verifyPaymentEndpoint,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${idToken}`
+            },
+            body: JSON.stringify(paymentResponse)
+          }
+        );
+
+        if (verifyResponse.ok) {
+          alert("Payment verified. Premium access activated.");
+          $("upgradeModal").classList.add("hidden");
+        } else {
+          alert("Payment received, but verification failed.");
+        }
+      }
+    });
+
+    razorpay.open();
+  } catch (error) {
+    alert(error.message);
+  }
+};
+
+/* ================= UI ================= */
+$("openSidebar").onclick = () =>
+  $("sidebar").classList.remove("-translate-x-full");
+
+$("closeSidebar").onclick = () =>
+  $("sidebar").classList.add("-translate-x-full");
+
+$("profileButton").onclick = () =>
+  alert("Profile page will open here in the full React application.");
+
+$("themeToggle").onclick = () => {
+  document.documentElement.classList.toggle("dark");
+
+  localStorage.setItem(
+    "cai-theme",
+    document.documentElement.classList.contains("dark") ? "dark" : "light"
+  );
+};
+
+if (localStorage.getItem("cai-theme") === "dark") {
+  document.documentElement.classList.add("dark");
+}
+
+/* Show notice only if backend URL is still placeholder */
+if (APP_CONFIG.aiEndpoint.includes("YOUR_DEPLOYED_FUNCTION_URL")) {
+  $("aiNotice").classList.remove("hidden");
+}
+</script>
+</body>
+</html>
